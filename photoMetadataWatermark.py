@@ -75,10 +75,11 @@ def parseDepth(data):
         depth = depth + "ft"
     return depth    
 
-def infoMark(data, photo):
+def infoMark(data, photo, originData):
     ''' Takes a photo and list of Strings and writes them in vertical order in the bottom left of the photo
         @data - The List of Strings to infomark the photo
-        @photo - Location of the Picture to be marked '''
+        @photo - Location of the Picture to be marked 
+        @originData - The original metadata that needs to be added back to the new photo'''
     print(data)
     print(photo)
 
@@ -115,7 +116,7 @@ def infoMark(data, photo):
     fileLoc = outputLoc + photo.rsplit('\\', 1)[1]
     print(fileLoc)
     #Pillow did some funky things at 100% quality, pictures ended up significantly larger than the originals. 90% Seemed fine and offered significant space savings
-    out.save(fileLoc, quality=90)
+    out.save(fileLoc, quality=90,exif=origin.info['exif'])
 
 
 #Iterates over everything in the given directory, filtering pictures and adding an Infomark based on the optional args provided
@@ -124,10 +125,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
         #Fetch the image metadata so we can grab the date the camera thinks the photo was taken, to ensure we can process these in order taken
         exiv_image = pyexiv2.Image(pic)
         data = exiv_image.read_exif()
-        
-        #print(data)
 
-        print(pic)
         info = []
 
         #Check if user wanted to include time, if so truncate to day and include
@@ -190,7 +188,6 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
                 pass
         
         if env:
-            print("Had environment! " + env)
             info.append(env)
 
         #If Author was requested, attempt to include. If it cannot be found try Copyright next
@@ -220,12 +217,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
         #Close the image because the library tells us to and we'll need to use a different library to do the actual photo manipulation
         exiv_image.close()        
 
-        infoMark(info, pic)
+        infoMark(info, pic, data)
     #If we can't open it, it must not be a picture so move on
     except RuntimeError:
         continue
-
-
-
-
-    # addData.update({'Exif.Image.Copyright': author, 'Exif.Image.XPAuthor': author}) 

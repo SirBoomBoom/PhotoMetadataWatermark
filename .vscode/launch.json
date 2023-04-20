@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             //"args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-v", "-l", "-g", "-a", "-A", "-m=Soo sleey\\nKoolKidsInc"]
-            "args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-l", "-a"]
+            "args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-l", "-a", "-A"]
         }
     ]
 }
