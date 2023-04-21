@@ -80,8 +80,12 @@ def infoMark(data, photo, originData):
         @data - The List of Strings to infomark the photo
         @photo - Location of the Picture to be marked 
         @originData - The original metadata that needs to be added back to the new photo'''
-    print(data)
-    print(photo)
+    if args.verbose:
+        print(data)
+        print(photo)
+
+    if photo.upper().endswith("NEF"):
+        return
 
     #Get the photo and make a copy to edit that is RGBA so we can have transparent watermarks
     origin = Image.open(photo).convert("RGBA")
@@ -102,7 +106,8 @@ def infoMark(data, photo, originData):
     dataMark = ""
     for datum in data:
         dataMark = dataMark + datum + "\n"
-    print(dataMark)
+    if args.verbose:
+        print(dataMark)
     #Calculate the starting height based on number of datum being used
     startingLoc = round((height/100 * 99) - (round(height/50) * len(data)))
     #I couldn't figure out how to make the text colour be smart about changing based on light or dark backgrounds, so now it's the user's problem
@@ -114,13 +119,17 @@ def infoMark(data, photo, originData):
 
     # Save the image to destination directory
     fileLoc = outputLoc + photo.rsplit('\\', 1)[1]
-    print(fileLoc)
+    if args.verbose:
+        print(fileLoc)
     #Pillow did some funky things at 100% quality, pictures ended up significantly larger than the originals. 90% Seemed fine and offered significant space savings
     out.save(fileLoc, quality=90,exif=origin.info['exif'])
 
-
+c = 0
 #Iterates over everything in the given directory, filtering pictures and adding an Infomark based on the optional args provided
-for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):    
+for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
+    c = c + 1
+    if c % 20 == 0:
+        print(f"Processed {c} files.")
     try:
         #Fetch the image metadata so we can grab the date the camera thinks the photo was taken, to ensure we can process these in order taken
         exiv_image = pyexiv2.Image(pic)
@@ -140,8 +149,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
 
         #If Location was requested, attempt to include
         if args.location:
-            try:
-                print(data['Exif.Image.ReelName'])
+            try:                
                 info.append(data['Exif.Image.ReelName'])
             except KeyError:
                 try:
@@ -192,9 +200,8 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
 
         #If Author was requested, attempt to include. If it cannot be found try Copyright next
         if args.author:
-            try:
-                print(data['Exif.Image.XPAuthor'])
-                info.append(data['Exif.Image.XPAuthor'])
+            try:                
+                info.append(data['Exif.Image.XPAuthor'])                
             except KeyError:
                 try:
                     if args.verbose:
