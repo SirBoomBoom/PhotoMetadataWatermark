@@ -7,8 +7,7 @@ import PIL
 from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
-from PIL import ImageChops
-from PIL import ImageOps
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("directory", type=str, help="The directory with the photos you wish to infomark. By default the output directory will be created here as well.")
@@ -20,10 +19,14 @@ parser.add_argument("-g", "--gps", action="store_true", help="Includes the GPS l
 parser.add_argument("-S", "--SILLY", action="store_true", help="Silly Standards, everyone knows Feet and F° are the superior measurements (except for in SCIENCE!). And because the author " + 
                     " is from `MERICA! those silly standards will be ignored by default unless this flag is set. That means that all numbers that should be in Metric will be interpreted as imperial")
 parser.add_argument("-A", "--author", action="store_true", help="Includes the Author if present, elses uses the Copywrite in the Infomark")
+parser.add_argument("-D", "--description", action="store_true", help="Includes the Description if present")
 parser.add_argument("-m", "--misc", type=str, help="Any additional text you wish included. \\n can be used to insert new lines")
 parser.add_argument("-v", "--verbose", action="store_true", help="Flood the console with Print statements")
 parser.add_argument("-c", "--colour", type=str, default="White", help="Colour to use for Infomark. Takes standard English colors as input (e.g. Blue) Defaults to White")
 parser.add_argument("-o", "--opacity", type=int, default=75, help="Opacity to use for Infomark as an integer between 0 (transparent) and 255 (completely opaque). Defaults to 75")
+parser.add_argument("-s", "--size", type=float, default=2, help="Size of the font to use, as a percentage of the overall picture height. Default is 2.0, maximum is 98")
+parser.add_argument("-q", "--quality", type=int, default=90, help="The 'quality' of the JPEG compression as a percentage from 1-100, defaulting to 90. This is primarily controls the size of the resulting picture. " +
+                    "WARNING: Qualities over 95 appear to get wonky, sometimes resulting in photos significantly larger than the original at 100%.")
 parser.add_argument("-f", "--folder", type=str, default="InfoMarked\\", help="Directory that InfoMarked copies of pictures will be saved to. Defaults to a new one called InfoMarked at the location of the photos")
 args = parser.parse_args()
 
@@ -33,29 +36,25 @@ if os.path.isabs(args.folder):
     outputLoc = args.folder
 else:
     outputLoc = args.directory + args.folder
-
 if not os.path.exists(outputLoc):
     os.mkdir(outputLoc)
-
 print(outputLoc)
-
 
 def parseTude(tude, ref):
     '''Parses a single L***tude from the ugly EXIF standard to something prettier
        @tude - The EXIF formated Longitute or Latitude to be parsed
        @ref - The EXIF N/E/S/W reference to use as part of the coordinate  '''
-    print(tude)
-    coordFrac = re.split("/[0-9]+\s", tude+" ")
-    print(coordFrac)
-    coord = f"{coordFrac[0]}° {coordFrac[1]}' {round(int(coordFrac[2])/100)}\" {ref}"
-    print(coord)
+    
+    coordFrac = re.split("/[0-9]+\s", tude+" ")    
+    coord = f"{coordFrac[0]}° {coordFrac[1]}' {round(int(coordFrac[2])/100)}\" {ref}"    
     return coord
 
 def parseDepth(data):
     ''' Attempts to retrieve the depth or altitude from the EXIF metadata and then format it appropriately for the Infomark
         @data - EXIF metadata that may contain either WaterDepth or GPSAltitude information'''    
     try:
-        depth = (data['Exif.Photo.WaterDepth']).split("/",1)[0]
+        depthFraction = (data['Exif.Photo.WaterDepth']).split("/")   
+        depth = str((int(depthFraction[0])/int(depthFraction[1]))) 
     except KeyError:
         try:
             if args.verbose:
@@ -64,7 +63,10 @@ def parseDepth(data):
             #If Ref = 1, then we are dealing with negative altitudes
             if(int(data['Exif.GPSInfo.GPSAltitudeRef'])):
                 depth = "-"
-            depth = depth + (data['Exif.GPSInfo.GPSAltitude']).split("/",1)[0]            
+            else:
+                depth = ""
+            depthFraction = (data['Exif.GPSInfo.GPSAltitude']).split("/")            
+            depth = depth + str((int(depthFraction[0])/int(depthFraction[1])))       
         except KeyError:
             if args.verbose:
                 print("No GPSAltitude found")
@@ -97,7 +99,7 @@ def infoMark(data, photo, originData):
     mark = Image.new("RGBA", origin.size, (255, 255, 255, 0))
 
     # Adding custom font
-    fnt = ImageFont.truetype("arial.ttf", round(height/50))
+    fnt = ImageFont.truetype("arial.ttf", round(height/100*args.size))
     
     # Creating image text
     image = ImageDraw.Draw(mark)
@@ -105,14 +107,16 @@ def infoMark(data, photo, originData):
     # Make the text written into center as one giant block so the text() will take it
     dataMark = ""
     for datum in data:
-        dataMark = dataMark + datum + "\n"
+        dataMark = f"{dataMark}\n{datum}"
     if args.verbose:
         print(dataMark)
     #Calculate the starting height based on number of datum being used
-    startingLoc = round((height/100 * 99) - (round(height/50) * len(data)))
+    startingLoc = round((height/100 * 99) - (round(height/100*args.size) * len(data)))
+    #startingLoc = round(height - (round(height/100*args.size) * len(data)))
     #I couldn't figure out how to make the text colour be smart about changing based on light or dark backgrounds, so now it's the user's problem
     color =(PIL.ImageColor.getrgb(args.colour) + (args.opacity,))    
-    image.text((round(width/100), startingLoc), dataMark, font=fnt, fill=(color))
+    #image.text((round(width/100), startingLoc), dataMark, font=fnt, fill=(color))
+    image.text((round(width/100), round(height/100*99)), dataMark, anchor="ld", font=fnt, fill=(color))
     
     # Combine the image with text watermark and convert back to RGB
     out = Image.alpha_composite(origin, mark).convert("RGB")
@@ -122,7 +126,7 @@ def infoMark(data, photo, originData):
     if args.verbose:
         print(fileLoc)
     #Pillow did some funky things at 100% quality, pictures ended up significantly larger than the originals. 90% Seemed fine and offered significant space savings
-    out.save(fileLoc, quality=90,exif=origin.info['exif'])
+    out.save(fileLoc, quality=args.quality,exif=origin.info['exif'])
 
 c = 0
 #Iterates over everything in the given directory, filtering pictures and adding an Infomark based on the optional args provided
@@ -144,7 +148,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
                 info.append((data['Exif.Image.DateTime']).split()[0].replace(":","/"))
             except KeyError:
                 if args.verbose:
-                    print("No DateTime found")
+                    print("No DateTime found for photo: " + pic)
                 pass
 
         #If Location was requested, attempt to include
@@ -154,11 +158,11 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
             except KeyError:
                 try:
                     if args.verbose:
-                        print("No Location found")
+                        print("No Location found for photo: " + pic)
                     info.append(data['Exif.Photo.ImageUniqueID'])
                 except KeyError:
                     if args.verbose:
-                        print("No UniqueID found")
+                        print("No UniqueID found for photo: " + pic)
                     pass
         
         if args.gps:
@@ -169,7 +173,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
                 info.append(f"{lat} {long}")                
             except KeyError:
                 if args.verbose:
-                    print("No GPS Location Found")
+                    print("No GPS Location Found for photo: " + pic)
                 pass
 
         
@@ -192,11 +196,24 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
                 env = env + temp
             except KeyError:
                 if args.verbose:
-                    print("No Temperature found")
+                    print("No Temperature found for photo: " + pic)
                 pass
         
         if env:
             info.append(env)
+
+        #If the user specified addional text to add to the image do so now. No safety checks, what could possibly go wrong?
+        if args.description:
+            try:
+                info.append(data['Exif.Image.ImageDescription'])
+            except KeyError:
+                if args.verbose:
+                    print("No Description found for photo: " + pic)
+
+        #If the user specified addional text to add to the image do so now. No safety checks, what could possibly go wrong?
+        if args.misc:
+            for surprise in args.misc.split("\\n"):
+                info.append(surprise) 
 
         #If Author was requested, attempt to include. If it cannot be found try Copyright next
         if args.author:
@@ -205,22 +222,17 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
             except KeyError:
                 try:
                     if args.verbose:
-                        print("No Author found")
+                        print("No Author found for photo: " + pic)
                     #This key always returned an empty string on our test photos, don't know if that is always true
                     if data['Exif.Image.Copyright']:
                         info.append(data['Exif.Image.Copyright'])
                     elif args.verbose:
-                        print("No Copyright found")
+                        print("No Copyright found for photo: " + pic)
                 except KeyError:
                     if args.verbose:
-                        print("No Copyright found")
+                        print("No Copyright found for photo: " + pic)
                     pass
         
-        #If the user specified addional text to add to the image do so now. No safety checks, what could possibly go wrong?
-        if args.misc:
-            for surprise in args.misc.split("\\n"):
-                info.append(surprise) 
-
         #Close the image because the library tells us to and we'll need to use a different library to do the actual photo manipulation
         exiv_image.close()        
 
