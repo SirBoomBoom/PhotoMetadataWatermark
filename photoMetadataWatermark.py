@@ -5,6 +5,7 @@ import re
 import pyexiv2
 import PIL
 from PIL import Image
+from PIL import ImageOps
 from PIL import ImageFont
 from PIL import ImageDraw
 
@@ -18,8 +19,11 @@ parser.add_argument("-l", "--location", action="store_true", help="Attempts to u
 parser.add_argument("-g", "--gps", action="store_true", help="Includes the GPS location of the photo, in the form ##°##\'###\" if present, in the Infomark")
 parser.add_argument("-S", "--SILLY", action="store_true", help="Silly Standards, everyone knows Feet and F° are the superior measurements (except for in SCIENCE!). And because the author " + 
                     " is from `MERICA! those silly standards will be ignored by default unless this flag is set. That means that all numbers that should be in Metric will be interpreted as imperial")
+parser.add_argument("-T", "--title", action="store_true", help="Includes the Title if present, (EXIF data refers to it as XPTitle, so may be a Windows only thing)")
 parser.add_argument("-A", "--author", action="store_true", help="Includes the Author if present, elses uses the Copywrite in the Infomark")
 parser.add_argument("-D", "--description", action="store_true", help="Includes the Description if present")
+parser.add_argument("-J", "--subject", action="store_true", help="Includes the Subject if present, (EXIF data refers to it as XPSubject, so may be a Windows only thing)")
+parser.add_argument("-C", "--comment", action="store_true", help="Includes the Comment if present, (EXIF data refers to it as XPComment, so may be a Windows only thing)")
 parser.add_argument("-m", "--misc", type=str, help="Any additional text you wish included. \\n can be used to insert new lines")
 parser.add_argument("-v", "--verbose", action="store_true", help="Flood the console with Print statements")
 parser.add_argument("-c", "--colour", type=str, default="White", help="Colour to use for Infomark. Takes standard English colors as input (e.g. Blue) Defaults to White")
@@ -89,9 +93,9 @@ def infoMark(data, photo, originData):
     if photo.upper().endswith("NEF"):
         return
 
-    #Get the photo and make a copy to edit that is RGBA so we can have transparent watermarks
-    origin = Image.open(photo).convert("RGBA")
-
+    #Get the photo and make a copy to edit that is RGBA so we can have transparent watermarks, then transpose it to match prefered orientation
+    origin = ImageOps.exif_transpose(Image.open(photo).convert("RGBA"))    
+    
     #Get the width and height of the image 
     width, height = origin.size
 
@@ -143,28 +147,54 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
 
         #Check if user wanted to include time, if so truncate to day and include
         if args.date:
-            try:
-                #Get the local timestamp the picture was taken                
+            if data.get('Exif.Image.DateTimeOriginal'):
+                info.append((data['Exif.Image.DateTimeOriginal']).split()[0].replace(":","/"))
+            elif data.get('Exif.Photo.DateTimeOriginal'):
+                info.append((data['Exif.Photo.DateTimeOriginal']).split()[0].replace(":","/"))
+            elif data.get('Exif.Photo.DateTimeDigitized'):
+                info.append((data['Exif.Photo.DateTimeDigitized']).split()[0].replace(":","/"))
+            elif data.get('Exif.Image.DateTime'):
                 info.append((data['Exif.Image.DateTime']).split()[0].replace(":","/"))
+            elif args.verbose:
+                print("No DateTime found for photo: " + pic)
+
+        #If Title was requested, attempt to include
+        if args.title:
+            try:                
+                info.append(data['Exif.Image.XPTitle'].removesuffix('\x00'))
+            except KeyError:
+                try:
+                    if args.verbose:
+                        print("No Title found for photo: " + pic)
+                    info.append(data['Exif.Photo.ImageUniqueID'])                    
+                except KeyError:
+                    if args.verbose:
+                        print("No UniqueID found for photo: " + pic)
+
+        #If Subject was requested, attempt to include
+        if args.subject:
+            try:                
+                info.append(data['Exif.Image.XPSubject'].removesuffix('\x00'))
             except KeyError:
                 if args.verbose:
-                    print("No DateTime found for photo: " + pic)
-                pass
+                    print("No Subject found for photo: " + pic)
+
+        #If Comments were requested, attempt to include
+        if args.comment:
+            try:                
+                info.append(data['Exif.Image.XPComment'].removesuffix('\x00'))
+            except KeyError:
+                if args.verbose:
+                    print("No Comment found for photo: " + pic)
 
         #If Location was requested, attempt to include
         if args.location:
             try:                
                 info.append(data['Exif.Image.ReelName'])
             except KeyError:
-                try:
-                    if args.verbose:
-                        print("No Location found for photo: " + pic)
-                    info.append(data['Exif.Photo.ImageUniqueID'])
-                except KeyError:
-                    if args.verbose:
-                        print("No UniqueID found for photo: " + pic)
-                    pass
-        
+                if args.verbose:
+                    print("No Location found for photo: " + pic)
+
         if args.gps:
             try:
                 #Get the local timestamp the picture was taken
@@ -174,7 +204,6 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
             except KeyError:
                 if args.verbose:
                     print("No GPS Location Found for photo: " + pic)
-                pass
 
         
         #Because Depth and Temperature seem likely to be together and are tiny, attempt to put them on the same line
@@ -205,7 +234,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
         #If the user specified addional text to add to the image do so now. No safety checks, what could possibly go wrong?
         if args.description:
             try:
-                info.append(data['Exif.Image.ImageDescription'])
+                info.append(data['Exif.Image.ImageDescription'].removesuffix('\x00'))
             except KeyError:
                 if args.verbose:
                     print("No Description found for photo: " + pic)
@@ -218,7 +247,7 @@ for pic in filter(os.path.isfile, glob.glob(args.directory + '*')):
         #If Author was requested, attempt to include. If it cannot be found try Copyright next
         if args.author:
             try:                
-                info.append(data['Exif.Image.XPAuthor'])                
+                info.append(data['Exif.Image.XPAuthor'].removesuffix('\x00'))
             except KeyError:
                 try:
                     if args.verbose:

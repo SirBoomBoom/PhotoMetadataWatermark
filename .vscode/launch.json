@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             //"args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-v", "-l", "-g", "-a", "-A", "-m=Soo sleey\\nKoolKidsInc"]
-            "args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-l", "-a", "-o=175", "-g", "-A"]
+            "args": ["C:\\Github\\SyncPhotoDepth\\", "-t", "-d", "-l", "-a", "-o=175", "-g", "-AJTC"]
             //"args": ["C:\\Users\\Don.INVADER\\Pictures\\2023\\Indonesia\\Dives\\Dive Site 6 - Fam\\Dive 22 - Fam - Melissa's Garden\\", "-t", "-d", "-l", "-a", "-o=125"]
             //"args": ["C:\\Github\\SyncPhotoDepth\\", "-o=125", "-m=Peter Mitchell", "-s=2.5", "-q=80", "-Dvaldt"]
         }
